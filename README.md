@@ -9,4 +9,3 @@ Hope this code can be useful. I would appreciate you citing the dataset and rela
 2. Yi, W.\*‡, Chen, J.‡, Wang, D\*. et al. A multi-modal dataset of electroencephalography and functional near-infrared spectroscopy recordings for motor imagery of multi-types of joints from unilateral upper limb. Sci Data 12, 953 (2025). https://doi.org/10.1038/s41597-025-05286-0
 
 # fNIRS_BCI_wOpenSourceDataset
-# fNIRS_BCI_wOpenSourceDataset
