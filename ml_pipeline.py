@@ -11,8 +11,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline, FeatureUnion
 
 from config import (
-    dataset_name, class_of_interest, data_type, use_hbr, preprocessing_params,
-    use_models, params, scenario_name, K, valid_size, seed, n_subjects,
+    dataset_name, class_of_interest, use_hbr, preprocessing_params,
+    use_models, params, scenario_name, K, valid_size, seed, num_subjects,
     start_subject, end_subject, target_subject
 )
 from preprocessing import preprocessing_fnirs_func
@@ -22,7 +22,7 @@ from utils import mkdir
 import os
 
 
-def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
+def intrasubject_tests(dataset, dir_datetime_mark=None, datetime_mark=None):
     """
     Main function: process all subjects, train models, and evaluate performance.
     
@@ -52,11 +52,10 @@ def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
     print("Seed: ", seed)
     print("Dataset: ", dataset_name)
     print("Class of intereset: ", class_of_interest)
-    print("Data type: ", data_type)
-    print("Number of subjects: ", n_subjects)
-    if n_subjects == 1:
+    print("Number of subjects: ", num_subjects)
+    if num_subjects == 1:
         print("Target subject: ", target_subject)
-    else:
+    else: 
         print("Start subject: ", start_subject)
         print("End subject: ", end_subject)
     print("Tmin: ", str(dataset.tmin))
@@ -90,27 +89,27 @@ def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
     print("------------------------------------------------------------------")
 
     # Initialize arrays to store accuracies for all subjects and models
-    # Shape: (n_subjects + 1, n_models) - extra row for average across subjects
-    n_sessions_per_subject = dataset.n_sessions_per_subject
-    train_acc_array = np.zeros((n_subjects * n_sessions_per_subject + 1, len(model_names)))  # Accuracy array of the training set. Dimension: n_subjects* n_sessions_in_1_subject + 1 (Average)
-    valid_acc_array = np.zeros((n_subjects * n_sessions_per_subject + 1, len(model_names)))  # Accuracy array of the validation set. Dimension: n_subjects* n_sessions_in_1_subject + 1 (Average)
-    test_acc_array = np.zeros((n_subjects * n_sessions_per_subject + 1, len(model_names)))  # Accuracy array of the test set. Dimension: n_subjects* n_sessions_in_1_subject + 1 (Average)
+    # Shape: (num_subjects + 1, n_models) - extra row for average across subjects
+    num_sessions_per_subject = dataset.num_sessions_per_subject
+    train_acc_array = np.zeros((num_subjects * num_sessions_per_subject + 1, len(model_names)))  # Accuracy array of the training set. Dimension: num_subjects* n_sessions_in_1_subject + 1 (Average)
+    valid_acc_array = np.zeros((num_subjects * num_sessions_per_subject + 1, len(model_names)))  # Accuracy array of the validation set. Dimension: num_subjects* n_sessions_in_1_subject + 1 (Average)
+    test_acc_array = np.zeros((num_subjects * num_sessions_per_subject + 1, len(model_names)))  # Accuracy array of the test set. Dimension: num_subjects* n_sessions_in_1_subject + 1 (Average)
 
     subject_session_names = []  # List to store subject-session identifiers for results table
-
+    trained_models = {} # store trained models for later use
     # Process each subject independently (intra-subject analysis)
     for subject_idx in range(start_subject - 1, end_subject):
         
         print("\n###############################################################################\n")
         
         # Handle case where only one subject is processed
-        if n_subjects == 1:  # Run on 1 specified subject
+        if num_subjects == 1:  # Run on 1 specified subject
             subject_idx = target_subject - 1
         subject_name = str(subject_idx + 1)
-        if subject_name == '9':
-            continue
+        # if subject_name == '9':
+        #     continue
         # Process each session (usually just 1 session per subject for this dataset)
-        n_sessions = dataset.n_sessions_per_subject if dataset.n_sessions_per_subject is not None else 1
+        n_sessions = dataset.num_sessions_per_subject if dataset.num_sessions_per_subject is not None else 1
         for session_idx in range(n_sessions):
 
             # Create subject-session identifier (e.g., "3s1" = subject 3, session 1)
@@ -121,7 +120,7 @@ def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
 
             # Load raw data files for this subject from disk
             # This reads all 8 blocks and concatenates them into a single Raw object
-            dataset.load([subject_idx + 1], session_list=[session_idx + 1], data_type=data_type)
+            dataset.load([subject_idx + 1], session_list=[session_idx + 1])
             print("Loading data of subject %s... Done." % subject_session_name)
 
             Y_train_list = []  # Store labels for each model (usually same across models)
@@ -132,21 +131,21 @@ def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
                 info_list = []  # Store metadata
 
                 # Get fNIRS data for this subject (stored in dataset object after load())
-                raw_file_fnirs = dataset.raw_file_fnirs_list[0]
+                raw_data = dataset.raw_data_list[0]
 
                 # Handle both single file and list of files (for flexibility)
-                if type(raw_file_fnirs) != list:
-                    raw_file_fnirs = [raw_file_fnirs]
+                if type(raw_data) != list:
+                    raw_data = [raw_data]
                 
                 X_fnirs_train = []  # List to store preprocessed data from each file
                 Y_fnirs_train = []  # List to store labels from each file
                 info_fnirs = []
                 
                 # Preprocess each raw file (usually just one concatenated file per subject)
-                for raw_file_idx, raw_file in enumerate(raw_file_fnirs):
+                for raw_file_idx, raw_file in enumerate(raw_data):
                     # Apply preprocessing pipeline: OD → Beer-Lambert → filter → epochs
                     # This converts raw light intensity to machine-learning-ready data
-                    X_fnirs_train_elem, Y_fnirs_train_elem, info_fnirs, frequency_bands_list = preprocessing_fnirs_func(
+                    X_fnirs_train_elem, Y_fnirs_train_elem, info_fnirs = preprocessing_fnirs_func(
                         raw_file,
                         dataset,
                         preprocessing_params,
@@ -222,15 +221,20 @@ def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
                                                                                  seed=seed)
 
                 # Store results in arrays
-                if n_subjects == 1:
+                if num_subjects == 1:
                     subject_idx = 0  # Adjust index for single-subject case
-                subject_session_idx = subject_idx * n_sessions_per_subject + session_idx
+                subject_session_idx = subject_idx * num_sessions_per_subject + session_idx
                 train_acc_array[subject_session_idx][model_index[model_name]] = train_acc_elem
                 valid_acc_array[subject_session_idx][model_index[model_name]] = valid_acc_elem
                 test_acc_array[subject_session_idx][model_index[model_name]] = test_acc_elem
                 print("Building %s model of subject %s with scenario %s. Done." % (
                     model_name, subject_session_name, scenario_name))
 
+                # train final model on all data for this subject
+                model.fit(X_train, Y_train)  
+                subj_id  = subject_idx + 1
+                sess_id = session_idx + 1
+                trained_models[(subj_id, sess_id, model_name)] = model
     # Calculate average accuracies across all subjects (stored in last row of arrays)
     # This gives us the overall performance across all subjects
     train_acc_array[-1] = train_acc_array[:-1].mean(axis=0)
@@ -292,5 +296,5 @@ def test_on_each_subject(dataset, dir_datetime_mark=None, datetime_mark=None):
         pdf_result_valid.to_csv(dir_path + "/" + datetime_mark + "_dataset=" + dataset_name + "__valid.csv")
     pdf_result_test_acc.to_csv(dir_path + "/" + datetime_mark + "_dataset=" + dataset_name + "__test_acc.csv")
 
-    return dir_datetime_mark
+    return dir_datetime_mark, trained_models
 
