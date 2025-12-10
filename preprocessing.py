@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import mne
 from mne import Epochs, events_from_annotations
+from config import n_jobs
 
 
 def exponential_moving_standardize(data, factor_new=0.001, eps=1e-4):
@@ -67,7 +68,7 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
         X_fnirs: Preprocessed epoch data (n_epochs, n_channels, n_timepoints)
         Y_fnirs: Class labels (0-indexed, e.g., [0, 0, 1, 1, ...])
         info_fnirs: Metadata about the data (channel names, sampling rate, etc.)
-        frequency_bands_list: List of frequency bands used (for compatibility with other code)
+        freq_bounds: List of frequency bands used (for compatibility with other code)
     """
     # Step 1: Convert raw light intensity to optical density (OD)
     # OD = -log(I/I0) where I is measured intensity, I0 is reference intensity
@@ -88,12 +89,12 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
                                                            preprocessing_params["upper_bound"],
                                                            method='iir',
                                                            iir_params=iir_params,
-                                                           n_jobs=preprocessing_params["n_jobs"])
+                                                           n_jobs=n_jobs)
 
     # Step 4: Apply exponential moving standardization (optional)
     if preprocessing_params["moving_average_std"]:
         hemo_data = hemo_data.apply_function(exponential_moving_standardize,
-                                                                   n_jobs=preprocessing_params["n_jobs"],
+                                                                   n_jobs=n_jobs,
                                                                    channel_wise=False)
 
     # Step 5: Extract epochs and convert to numpy arrays
@@ -109,7 +110,7 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
     # Convert epochs to numpy array: shape (n_epochs, n_channels, n_timepoints)
     X_fnirs = epochs.get_data()
     
-    # Extract labels and convert to 0-indexed
+    # extract labels and convert to 0-indexed
     # epochs.events[:, -1] gets the event ID (last column) for each event
     label = epochs.events[:, -1]
     label_names = np.unique(label)
@@ -117,20 +118,20 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
         label[label == label_name] = label_idx
     Y_fnirs = label
 
-    # Clean up: remove extra time points if resampling created remainder
-    n_samples = X_fnirs.shape[-1]
-    if (n_samples - (dataset.tmax - dataset.tmin) * dataset.sample_rate_fnirs) > 0:
-        remainder = int(n_samples - (dataset.tmax - dataset.tmin) * dataset.sample_rate_fnirs)
-        if remainder != 0:
-            X_fnirs = X_fnirs[:, :, :-remainder]
+    # remove extra time points if resampling created remainder
+    # n_samples = X_fnirs.shape[-1]
+    # if (n_samples - (dataset.tmax - dataset.tmin) * dataset.sampling_rate) > 0:
+    #     remainder = int(n_samples - (dataset.tmax - dataset.tmin) * dataset.sampling_rate)
+    #     if remainder != 0:
+    #         X_fnirs = X_fnirs[:, :, :-remainder]
 
     info_fnirs = epochs.info
 
-    # Store frequency band information (for compatibility with other code)
-    frequency_bands_list = [
+    # freq band info 
+    freq_bounds = [
         {
             "fmin": preprocessing_params["lower_bound"],
             "fmax": preprocessing_params["upper_bound"]
         }
     ]
-    return X_fnirs, Y_fnirs, info_fnirs, frequency_bands_list
+    return X_fnirs, Y_fnirs, info_fnirs

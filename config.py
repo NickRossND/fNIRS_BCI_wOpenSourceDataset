@@ -8,10 +8,7 @@ dataset_name = "FineMI"  # Name of the dataset being processed
 # Which motor imagery tasks to classify (1-8, where each number represents a different task)
 # ["1", "7"] means we're doing binary classification between task 1 (Hand flexion/extension) and task 7 (Shoulder adduction/abduction)
 # This allows focusing on specific tasks rather than all 8 classes
-class_of_interest = ["1", "7"]
-
-# Type of neuroimaging data to process (can be ["fNIRS"], ["EEG"], or ["EEG", "fNIRS"])
-data_type = ["fNIRS"]
+class_of_interest = ["1","2"]
 
 # Whether to use deoxyhemoglobin (HbR) in addition to oxyhemoglobin (HbO)
 # True = use both HbO and HbR as features (doubles the number of channels)
@@ -24,10 +21,9 @@ preprocessing_params = {
     "filter_order": 6,  # Filter order (6th order Butterworth filter - higher = sharper cutoff, but more computation)
     "filter_type": "butter",  # Butterworth filter type (provides flat frequency response in passband)
     "lower_bound": 0.01,  # Lower frequency cutoff (Hz) - removes slow drifts (<0.01 Hz)
-    "upper_bound": 0.1,  # Upper frequency cutoff (Hz) - removes cardiac/respiratory artifacts (>0.1 Hz)
+    "upper_bound": 0.3,  # Upper frequency cutoff (Hz) - removes cardiac/respiratory artifacts (>0.3 Hz)
     # The passband (0.01-0.1 Hz) contains the hemodynamic response signal
-    "moving_average_std": True,  # Apply exponential moving standardization (removes slow drifts and non-stationarities)
-    "n_jobs": 2  # Number of parallel jobs for processing (2 = use 2 CPU cores)
+    "moving_average_std": True,  # Apply exponential moving standardization, addtl low freq noise reduction
 }
 
 # Which machine learning models to use
@@ -62,7 +58,7 @@ n_jobs = 4  # Number of parallel jobs for sklearn operations (4 = use 4 CPU core
 
 # Subject processing parameters
 start_subject = 1  # First subject to process (1-indexed)
-n_subjects = 18  # Total number of subjects in dataset
-end_subject = n_subjects  # Last subject to process (18 = process all subjects)
-target_subject = 3  # Specific subject to process if n_subjects == 1 (for single-subject analysis)
+num_subjects = 17  # Total number of subjects in dataset
+end_subject = num_subjects  # Last subject to process (18 = process all subjects)
+target_subject = 3  # Specific subject to process if num_subjects == 1 (for single-subject analysis)
 
