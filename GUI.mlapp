@@ -1,0 +1,288 @@
+classdef GUI_feedback < matlab.apps.AppBase
+
+    % Properties that correspond to app components
+    properties (Access = public)
+        UIFigure                matlab.ui.Figure
+        Image2                  matlab.ui.control.Image
+        Image                   matlab.ui.control.Image
+        StopButton              matlab.ui.control.Button
+        CylesEditField          matlab.ui.control.NumericEditField
+        CylesEditFieldLabel     matlab.ui.control.Label
+        WorktimeEditField       matlab.ui.control.NumericEditField
+        WorktimeEditFieldLabel  matlab.ui.control.Label
+        ResttimeEditField       matlab.ui.control.NumericEditField
+        ResttimeEditFieldLabel  matlab.ui.control.Label
+        TextArea                matlab.ui.control.TextArea
+        StartButton             matlab.ui.control.Button
+        FeedbackGUILabel        matlab.ui.control.Label
+    end
+
+    
+    properties (Access = public)
+        stop = 0;
+        server = tcpserver("127.0.0.1", 65432);
+        
+    end
+    
+    methods (Access = private)
+        
+        function block(app)
+            %Connect to server
+            
+
+            %baseline
+            tic;
+            score = 8;
+            hand = 17;
+            while (toc < app.ResttimeEditField.Value)
+                app.TextArea.Value = 'Baseline';
+                pause(.01); 
+                if(app.stop ==1)
+                    return;
+                end
+            end
+           
+
+            %run the cycles
+            for i=1:app.CylesEditField.Value
+                tic;
+
+                % rest -- indicate if at a rest state
+                while (toc < app.ResttimeEditField.Value)
+                    app.TextArea.Value = 'rest';
+                    pause(.1);
+                    if(app.stop ==1)
+                        disp("stop");
+                    end
+                    hand = 17;
+                    app.Image2.ImageSource="images/17.png";
+                    app.Image.ImageSource="images/rest.png";
+                end
+                 tic;
+                while (toc < app.WorktimeEditField.Value)
+                    app.TextArea.Value = 'work';
+                    
+                    
+                    %read info from server
+                    hold = 0;
+                    while(hold == 0)
+                        if app.server.NumBytesAvailable > 0
+                            data = read(app.server, app.server.NumBytesAvailable, "string");
+                            disp("Received: " + data)
+                            hold = 1;
+                        end
+                    end    
+                    input = str2double(data);
+
+                    if input == 0
+                        score = max(0,score-1);
+                        hand = 17;
+                        text = "images/"+score+".png";
+                        app.Image.ImageSource= text;
+                        hand_text = "images/"+ hand +".png";
+                        app.Image2.ImageSource = hand_text;
+                    else
+                        score = min(15,score +1);
+                        %move up one and loop back to start
+                        %hand = hand +1;
+                        %if (hand == 24)
+                        %    hand = 17;
+                        %end
+                        text = "images/"+score+".png";
+                        app.Image.ImageSource = text;
+                        hand_text = "images/"+ 18 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.05);
+                        hand_text = "images/"+ 19 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.05);
+                        hand_text = "images/"+ 20 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.05);
+                        hand_text = "images/"+ 21 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.05);
+                        hand_text = "images/"+ 22 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.05);
+                        hand_text = "images/"+ 23 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.13);
+                        hand_text = "images/"+ 22 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.03);
+                        hand_text = "images/"+ 21 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.03);
+                        hand_text = "images/"+ 20 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.03);
+                        hand_text = "images/"+ 19 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.03);
+                        hand_text = "images/"+ 18 +".png";
+                        app.Image2.ImageSource = hand_text;
+                        pause(.03);
+                        hand_text = "images/"+ 17 +".png";
+                        app.Image2.ImageSource = hand_text;
+                       
+
+                       
+                        %hand_text = "images/"+ hand +".png";
+                        
+                        %app.Image2.ImageSource = hand_text;
+                    end
+                    if(app.stop ==1)
+                    return;
+                    end
+                    pause(1);
+                end
+       
+
+            
+            end
+        end
+    
+       
+    
+
+    end
+    
+    
+
+
+    % Callbacks that handle component events
+    methods (Access = private)
+
+        % Button pushed function: StartButton
+        function StartButtonPushed(app, event)
+
+            app.block()
+            %Reset reseter
+            app.stop = 0;       
+            app.TextArea.Value = 'Done';
+            pause(3);
+            app.TextArea.Value = 'Press start to begin experiemt';
+        end
+
+        % Button pushed function: StopButton
+        function StopButtonPushed(app, event)
+            app.stop = 1;
+
+
+        end
+    end
+
+    % Component initialization
+    methods (Access = private)
+
+        % Create UIFigure and components
+        function createComponents(app)
+
+            % Get the file path for locating images
+            pathToMLAPP = fileparts(mfilename('fullpath'));
+
+            % Create UIFigure and hide until all components are created
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.Position = [100 100 640 480];
+            app.UIFigure.Name = 'MATLAB App';
+
+            % Create FeedbackGUILabel
+            app.FeedbackGUILabel = uilabel(app.UIFigure);
+            app.FeedbackGUILabel.FontSize = 24;
+            app.FeedbackGUILabel.Position = [240 407 162 56];
+            app.FeedbackGUILabel.Text = 'Feedback GUI';
+
+            % Create StartButton
+            app.StartButton = uibutton(app.UIFigure, 'push');
+            app.StartButton.ButtonPushedFcn = createCallbackFcn(app, @StartButtonPushed, true);
+            app.StartButton.BackgroundColor = [0.6 0.9686 0.7255];
+            app.StartButton.Position = [493 26 86 40];
+            app.StartButton.Text = 'Start';
+
+            % Create TextArea
+            app.TextArea = uitextarea(app.UIFigure);
+            app.TextArea.Position = [17 207 176 100];
+            app.TextArea.Value = {'Press start to begin experiemt'};
+
+            % Create ResttimeEditFieldLabel
+            app.ResttimeEditFieldLabel = uilabel(app.UIFigure);
+            app.ResttimeEditFieldLabel.HorizontalAlignment = 'right';
+            app.ResttimeEditFieldLabel.Position = [17 28 56 22];
+            app.ResttimeEditFieldLabel.Text = 'Rest time';
+
+            % Create ResttimeEditField
+            app.ResttimeEditField = uieditfield(app.UIFigure, 'numeric');
+            app.ResttimeEditField.Position = [88 28 44 22];
+            app.ResttimeEditField.Value = 30;
+
+            % Create WorktimeEditFieldLabel
+            app.WorktimeEditFieldLabel = uilabel(app.UIFigure);
+            app.WorktimeEditFieldLabel.HorizontalAlignment = 'right';
+            app.WorktimeEditFieldLabel.Position = [151 28 59 22];
+            app.WorktimeEditFieldLabel.Text = 'Work time';
+
+            % Create WorktimeEditField
+            app.WorktimeEditField = uieditfield(app.UIFigure, 'numeric');
+            app.WorktimeEditField.Position = [225 28 35 22];
+            app.WorktimeEditField.Value = 30;
+
+            % Create CylesEditFieldLabel
+            app.CylesEditFieldLabel = uilabel(app.UIFigure);
+            app.CylesEditFieldLabel.HorizontalAlignment = 'right';
+            app.CylesEditFieldLabel.Position = [282 28 35 22];
+            app.CylesEditFieldLabel.Text = 'Cyles';
+
+            % Create CylesEditField
+            app.CylesEditField = uieditfield(app.UIFigure, 'numeric');
+            app.CylesEditField.Position = [332 28 34 22];
+            app.CylesEditField.Value = 10;
+
+            % Create StopButton
+            app.StopButton = uibutton(app.UIFigure, 'push');
+            app.StopButton.ButtonPushedFcn = createCallbackFcn(app, @StopButtonPushed, true);
+            app.StopButton.BackgroundColor = [0.949 0.749 0.749];
+            app.StopButton.FontColor = [0.051 0.051 0.051];
+            app.StopButton.Position = [390 26 81 39];
+            app.StopButton.Text = 'Stop';
+
+            % Create Image
+            app.Image = uiimage(app.UIFigure);
+            app.Image.Position = [461 120 172 275];
+            app.Image.ImageSource = fullfile(pathToMLAPP, 'images', '8.png');
+
+            % Create Image2
+            app.Image2 = uiimage(app.UIFigure);
+            app.Image2.Position = [209 165 237 185];
+            app.Image2.ImageSource = fullfile(pathToMLAPP, 'images', '16.png');
+
+            % Show the figure after all components are created
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    % App creation and deletion
+    methods (Access = public)
+
+        % Construct app
+        function app = GUI_feedback
+
+            % Create UIFigure and components
+            createComponents(app)
+
+            % Register the app with App Designer
+            registerApp(app, app.UIFigure)
+
+            if nargout == 0
+                clear app
+            end
+        end
+
+        % Code that executes before app deletion
+        function delete(app)
+
+            % Delete UIFigure when app is deleted
+            delete(app.UIFigure)
+        end
+    end
+end
