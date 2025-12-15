@@ -70,6 +70,8 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
         info_fnirs: Metadata about the data (channel names, sampling rate, etc.)
         freq_bounds: List of frequency bands used (for compatibility with other code)
     """
+    original_annotations = raw_data.annotations.copy()
+
     # Step 1: Convert raw light intensity to optical density (OD)
     # OD = -log(I/I0) where I is measured intensity, I0 is reference intensity
     optical_density = mne.preprocessing.nirs.optical_density(raw_data)
@@ -99,7 +101,15 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
 
     # Step 5: Extract epochs and convert to numpy arrays
     # Extract event markers from annotations
+    hemo_data.set_annotations(original_annotations)
     events, event_dict = events_from_annotations(hemo_data, event_id=dataset.event_id_fnirs)
+    # DEBUG: Check if events were found
+    # print(f"DEBUG: Found {len(events)} events in hemo_data")
+    # print(f"DEBUG: hemo_data.annotations: {hemo_data.annotations}")
+    # print(f"DEBUG: event_dict: {event_dict}")
+    # if len(events) == 0:
+    #     print("ERROR: No events found! Cannot create epochs.")
+    #     raise ValueError("No events found in preprocessed data. Check annotations and event_id_fnirs.")
     
     # Extract epochs: segments data into time windows around each event
     epochs = Epochs(hemo_data, events, event_id=dataset.event_id_fnirs, 
@@ -117,13 +127,6 @@ def preprocessing_fnirs_func(raw_data, dataset, preprocessing_params, subject_id
     for label_idx, label_name in enumerate(label_names):
         label[label == label_name] = label_idx
     Y_fnirs = label
-
-    # remove extra time points if resampling created remainder
-    # n_samples = X_fnirs.shape[-1]
-    # if (n_samples - (dataset.tmax - dataset.tmin) * dataset.sampling_rate) > 0:
-    #     remainder = int(n_samples - (dataset.tmax - dataset.tmin) * dataset.sampling_rate)
-    #     if remainder != 0:
-    #         X_fnirs = X_fnirs[:, :, :-remainder]
 
     info_fnirs = epochs.info
 

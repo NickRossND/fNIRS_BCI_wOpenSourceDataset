@@ -57,7 +57,7 @@ seed = 0  # Random seed for reproducibility
 n_jobs = 4  # Number of parallel jobs for sklearn operations (4 = use 4 CPU cores)
 
 # Subject processing parameters
-start_subject = 1  # First subject to process (1-indexed)
+start_subject = 2  # First subject to process (1-indexed)
 num_subjects = 17  # Total number of subjects in dataset
 end_subject = num_subjects  # Last subject to process (18 = process all subjects)
 target_subject = 3  # Specific subject to process if num_subjects == 1 (for single-subject analysis)

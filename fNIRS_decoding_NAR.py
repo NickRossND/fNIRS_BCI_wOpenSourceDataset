@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     #pick a subject/session + model to test "online"
     subj_id = 5     # 1-based
-    sess_id = 1     # 1-based
+    sess_id = 8     # 1-based
     model_name = list(use_models.keys())[0]  # e.g., "ML:fNIRS_Union:Mean;Slope+Zscore+SVM"
     
     model = trained_models[(subj_id, sess_id, model_name)]

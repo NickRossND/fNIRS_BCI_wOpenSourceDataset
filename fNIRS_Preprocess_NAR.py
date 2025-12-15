@@ -1,18 +1,14 @@
-# Before running this script, please ensure that the dataset was downloaded and saved in the "./Data/FineMI" directory
-
-# Import MNE-Python library for neuroimaging data processing (EEG, fNIRS, etc.)
+# Import MNE-Python library for neuroimaging data processing
 import mne
-# Import formatter for customizing number display in plots
 from matplotlib.ticker import FormatStrFormatter
-# Import MNE classes: Epochs (time-locked data segments), pick_types (channel selection), events_from_annotations (event markers)
 from mne import Epochs, pick_types, events_from_annotations
-# Import functions to concatenate multiple recordings and read different file formats
 from mne.io import concatenate_raws, read_raw_cnt, read_raw_nirx
+from config import n_jobs
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
-import gc  # Garbage collector for memory management
+import gc  
 import os.path
 
 # Time window for epoch extraction: epochs will be extracted from -4 seconds before to 14 seconds after each event
@@ -37,8 +33,7 @@ filtType = "butter"
 seed = 1  # Random seed for reproducibility (ensures same results on repeated runs)
 # Set MNE logging level to WARNING to suppress INFO and DEBUG messages (reduces console output)
 mne.set_log_level(verbose="WARNING")
-# Number of parallel jobs for processing (2 = use 2 CPU cores simultaneously for faster processing)
-num_jobs = 2
+
 
 def load_rawData(subject_name):
     n_blocks = 8  # Each subject has 8 experimental blocks (sessions)
@@ -139,7 +134,7 @@ def preprocessData(file_train, subject_name, tmin, tmax):
         "ftype": filtType
     }
     # filter the data using bandpass and plot PSD after the filtering
-    file_train_hemoData = file_train_hemo.filter(0.01, 0.3, method='iir', iir_params=iir_params, n_jobs=num_jobs)
+    file_train_hemoData = file_train_hemo.filter(0.01, 0.3, method='iir', iir_params=iir_params, n_jobs=n_jobs)
     fig = file_train_hemoData.compute_psd().plot(average=True, amplitude=False)
     fig.suptitle("After filtering", weight="bold", size="x-large")
     fig.savefig("img/fnirs/subject" + subject_name + "/afterFilt.png", dpi=300)
@@ -170,9 +165,7 @@ def preprocessData(file_train, subject_name, tmin, tmax):
 
 
 if __name__ == "__main__":
-    for subject in range(11, num_subjects + 1):
-        if subject == 9:
-            continue
+    for subject in range(1, num_subjects + 1):
         subject_name = str(subject)
         file_train, file_test = load_rawData(subject_name)
         X_train, Y_train, epoch_info = preprocessData(file_train, subject_name, tmin, tmax)

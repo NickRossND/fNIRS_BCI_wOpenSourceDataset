@@ -3,11 +3,13 @@
 # ============================================================================
 # FineMI dataset class for handling data loading and configuration
 
+import mne
 import numpy as np
 import warnings
 
 from mne.io import concatenate_raws, read_raw_nirx
 from config import class_of_interest, num_subjects
+from mne import Epochs, events_from_annotations, Annotations
 
 
 class FineMI():
@@ -148,6 +150,57 @@ class FineMI():
         else:
             # Use all event IDs if no specific selection
             self.event_id_fnirs = event_id_fnirs
+    
+    def split_raw_by_blocks(self, raw, n_blocks_to_split=4):
+        """
+        Split a combined Raw file (containing multiple blocks) into separate Raw objects.
+        Preserves event annotations for each block.
+        
+        Args:
+            raw: MNE Raw object containing multiple blocks
+            n_blocks_to_split: Number of blocks to split into (e.g., 4 for subject 1 block1-4 combined file)
+        
+        Returns:
+            List of Raw objects, one per block
+        """
+        # Get all events/annotations from the full raw file
+        events, event_dict = events_from_annotations(raw)
+        
+        if len(events) == 0:
+            raise ValueError("No events found in raw data; cannot split into blocks")
+        
+        # Calculate approximate duration per block
+        total_duration = raw.times[-1]
+        block_duration = total_duration / n_blocks_to_split
+        
+        # Split raw data into chunks by time
+        block_raws = []
+        for block_idx in range(n_blocks_to_split):
+            t_start = block_idx * block_duration
+            t_end = (block_idx + 1) * block_duration
+            raw_block = raw.copy().crop(tmin=t_start, tmax=t_end)
+            
+            # Copy and adjust annotations (events) that fall within this block's time window
+            # Shift event times so they're relative to the block's start time
+            block_annotations = []
+            for ann in raw.annotations:
+                ann_time = ann['onset']
+                if t_start <= ann_time < t_end:
+                    # Create a copy of the annotation and adjust its onset time
+                    ann_adjusted = ann.copy()
+                    ann_adjusted['onset'] = ann_time - t_start  # Shift to block-relative time
+                    block_annotations.append(ann_adjusted)
+            
+            # Set the adjusted annotations on this block
+            raw_block.set_annotations(mne.Annotations(
+                onset=[a['onset'] for a in block_annotations],
+                duration=[a['duration'] for a in block_annotations],
+                description=[a['description'] for a in block_annotations]
+            ))
+            
+            block_raws.append(raw_block)
+        
+        return block_raws
 
     def load(self, subject_list=[1], session_list=[1], path="./Data/FineMI/"):
         """
@@ -198,8 +251,9 @@ class FineMI():
                 raw_file.annotations.delete(idx_to_remove)
                 # Crop the raw data to only include periods with annotations
                 raw_file.crop_by_annotations()
-                raw_file_list.append(raw_file)
-
+                # Split combined block1-4 file into 4 separate Raw objects
+                block_raws = self.split_raw_by_blocks(raw_file, n_blocks_to_split=4)
+                raw_file_list.extend(block_raws)  # Add all 4 blocks to the list
                 # Block5-8: Load individual files for blocks 5 through 8
                 for block_idx in range(4, self.n_blocks):  # range(4, 8) = [4, 5, 6, 7]
                     file_name = "./Data/FineMI/subject" + subject_session_name + "/fNIRS/block" + str(

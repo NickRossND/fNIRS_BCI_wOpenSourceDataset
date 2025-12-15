@@ -127,64 +127,55 @@ def intrasubject_tests(dataset, dir_datetime_mark=None, datetime_mark=None):
             
             # Process each model (usually just one model in this script)
             for model_name in model_names:
-                X_train_list = []  # Store preprocessed data
-                info_list = []  # Store metadata
+               
+                print("Preprocessing data of subject %s... Done." % subject_session_name)
+                raw_blocks = dataset.raw_block_list  # list length = n_blocks (8)
+                if not isinstance(raw_blocks, list):
+                    raw_blocks = [raw_blocks]
 
-                # Get fNIRS data for this subject (stored in dataset object after load())
-                raw_data = dataset.raw_data_list[0]
+                X_blocks = []  # list of X for each block: shape (n_epochs_block, n_channels, n_times)
+                Y_blocks = []  # list of Y for each block
+                info_blocks = []  # optional: keep info if you want
 
-                # Handle both single file and list of files (for flexibility)
-                if type(raw_data) != list:
-                    raw_data = [raw_data]
-                
-                X_fnirs_train = []  # List to store preprocessed data from each file
-                Y_fnirs_train = []  # List to store labels from each file
-                info_fnirs = []
-                
-                # Preprocess each raw file (usually just one concatenated file per subject)
-                for raw_file_idx, raw_file in enumerate(raw_data):
-                    # Apply preprocessing pipeline: OD → Beer-Lambert → filter → epochs
-                    # This converts raw light intensity to machine-learning-ready data
-                    X_fnirs_train_elem, Y_fnirs_train_elem, info_fnirs = preprocessing_fnirs_func(
-                        raw_file,
+                for block_idx, raw_block in enumerate(raw_blocks):
+                    # Preprocess block: OD -> HbO/HbR -> filter -> epochs
+                    X_block, Y_block, info_fnirs= preprocessing_fnirs_func(
+                        raw_block,
                         dataset,
                         preprocessing_params,
                         subject_idx=subject_idx
                     )
 
-                    # Separate HbO and HbR channels
-                    # fNIRS data has interleaved channels: [HbO_ch1, HbR_ch1, HbO_ch2, HbR_ch2, ...]
-                    # [:, ::2, :] selects every other channel starting from 0 (HbO channels: 0, 2, 4, ...)
-                    # [:, 1::2, :] selects every other channel starting from 1 (HbR channels: 1, 3, 5, ...)
-                    X_hbo_train_elem = X_fnirs_train_elem[:, ::2, :].copy()
-                    X_hbr_train_elem = X_fnirs_train_elem[:, 1::2, :].copy()
+                    # Separate HbO and HbR
+                    X_hbo_block = X_block[:, ::2, :].copy()
+                    X_hbr_block = X_block[:, 1::2, :].copy()
 
-                    # Combine HbO and HbR if use_hbr is True
                     if use_hbr:
-                        # Concatenate along channel dimension: [all_HbO_channels, all_HbR_channels]
-                        # This doubles the number of channels (e.g., 24 channels → 48 channels)
-                        X_fnirs_train_elem = np.concatenate([X_hbo_train_elem, X_hbr_train_elem], axis=1)
+                        X_block = np.concatenate([X_hbo_block, X_hbr_block], axis=1)
                     else:
-                        # Use only HbO channels (faster, but may lose information)
-                        X_fnirs_train_elem = X_hbo_train_elem
-                    
-                    X_fnirs_train.append(X_fnirs_train_elem)
-                    Y_fnirs_train.append(Y_fnirs_train_elem)
-                
-                # Concatenate data from all files (if multiple)
-                X_fnirs_train = np.concatenate(X_fnirs_train)
-                Y_fnirs_train = np.concatenate(Y_fnirs_train)
+                        X_block = X_hbo_block  # only HbO
 
-                X_train_list.append(X_fnirs_train)
-                info_list.append(info_fnirs)
-                Y_train = Y_fnirs_train.copy()
+                    X_blocks.append(X_block)
+                    Y_blocks.append(Y_block)
+                    info_blocks.append(info_fnirs)
 
-                assert (len(X_train_list) > 0)  # Ensure we have at least one data source
+                print(f"Preprocessing data of subject {subject_session_name} into {len(X_blocks)} blocks... Done.")
+                # Sanity check: we expect at least 8 blocks
+                n_blocks = len(X_blocks)
+                assert n_blocks >= 8, f"Expected at least 8 blocks, got {n_blocks}"
 
-                # Get final training data (handle single vs multiple data types)
-                X_train = X_train_list if len(X_train_list) > 1 else X_train_list[0]
+                # Use blocks 1-7 (indices 0-6) for training + cross-validation
+                X_train = np.concatenate(X_blocks[:7], axis=0)
+                Y_train = np.concatenate(Y_blocks[:7], axis=0)
 
-                print("Preprocessing data of subject %s... Done." % subject_session_name)
+                # Use block 8 (index 7) as held-out validation
+                X_block8 = X_blocks[7]
+                Y_block8 = Y_blocks[7]
+
+                # If you want to keep existing structure:
+                X_train_list = [X_train]       # same interface as before
+                info_list = [info_blocks[0]]   # or keep per-block info if you need it later
+                Y_train = Y_train.copy()
 
                 Y_train_list.append(Y_train)
 
@@ -232,9 +223,19 @@ def intrasubject_tests(dataset, dir_datetime_mark=None, datetime_mark=None):
 
                 # train final model on all data for this subject
                 model.fit(X_train, Y_train)  
+                # Evaluate on held-out block 8 (session-like validation)
+                block8_acc = model.score(X_block8, Y_block8)
+                print(f"Held-out block 8 accuracy for subject {subject_session_name}, model {model_name}: {block8_acc:.4f}")
+                block8_acc_array = np.zeros((num_subjects * num_sessions_per_subject + 1, len(model_names)))
+                block8_acc_array[subject_session_idx][model_index[model_name]] = block8_acc
+
                 subj_id  = subject_idx + 1
                 sess_id = session_idx + 1
                 trained_models[(subj_id, sess_id, model_name)] = model
+    block8_acc_array[-1] = block8_acc_array[:-1].mean(axis=0)
+
+            
+    
     # Calculate average accuracies across all subjects (stored in last row of arrays)
     # This gives us the overall performance across all subjects
     train_acc_array[-1] = train_acc_array[:-1].mean(axis=0)
@@ -242,6 +243,9 @@ def intrasubject_tests(dataset, dir_datetime_mark=None, datetime_mark=None):
         valid_acc_array[-1] = valid_acc_array[:-1].mean(axis=0)
     test_acc_array[-1] = test_acc_array[:-1].mean(axis=0)
     mean_test_acc = test_acc_array[-1]  # Overall mean test accuracy
+    
+    if "1s1" not in subject_session_names:
+        test_acc_array = test_acc_array[1:, :]
 
     # Print results summary
     print("\ntrain_acc_array:", train_acc_array)
@@ -273,9 +277,11 @@ def intrasubject_tests(dataset, dir_datetime_mark=None, datetime_mark=None):
                 result_valid[i].append("%.4f" % valid_acc_array[i][j])
             result_test_acc[i].append("%.4f" % test_acc_array[i][j])
 
-    # Note: Subject 9 is skipped during processing (see line with "if subject_name == '9': continue")
+    # Note: Subject 1 is skipped during processing because 4 blocks are loaded as once causing issues
     # So it never gets added to subject_session_names, and no deletion is needed here
-    
+    # if "1s1" not in subject_names:
+    #     del result_train[0], result_valid[0], result_test_acc[0]
+    #     test_acc_array = test_acc_array[1:, :]
     # Create pandas DataFrames for easy CSV export
     # Rows = subjects (plus "Average"), Columns = model names
     pdf_result_train = pd.DataFrame(result_train, index=subject_names, columns=model_names)
